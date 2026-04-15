@@ -4,12 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=zerocool
+User=root
 WorkingDirectory=/home/zerocool/pi-server
 ExecStart=/usr/bin/node /home/zerocool/pi-server/server.js
 Restart=on-failure
 RestartSec=5
-Environment=PORT=3000
+Environment=PORT=80
 StandardOutput=journal
 StandardError=journal
 
