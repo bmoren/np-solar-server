@@ -1,6 +1,6 @@
-# Pi Server
+# np-solar-server
 
-A lightweight Node.js server for classroom use on a Raspberry Pi. Serves static files, auto-routes media, and supports real-time communication via Socket.io.
+A lightweight Node.js server for classroom use on a Raspberry Pi. Serves static files, auto-routes media, and supports real-time communication via Socket.io. Students interact via the simple `solar.js` client API.
 
 ## Features
 
@@ -12,14 +12,15 @@ A lightweight Node.js server for classroom use on a Raspberry Pi. Serves static 
 ## Project Structure
 
 ```
-pi-server/
+np-solar-server/
 ├── public/
 │   ├── index.html       # Default landing page
+│   ├── solar.js         # Student-facing Socket.io API
 │   └── media/           # Drop media files here
 ├── server.js            # Main server
 ├── package.json
 ├── pi-server.service    # systemd service file
-├── dnsmasq.conf         # DNS/DHCP config for custom domain
+├── dnsmasq.conf         # DNS config for solar.server domain
 └── .gitignore
 ```
 
@@ -40,8 +41,8 @@ sudo apt-get install -y dnsmasq
 
 ```bash
 cd /home/zerocool
-git clone https://github.com/<your-username>/pi-server.git
-cd pi-server
+git clone https://github.com/<your-username>/np-solar-server.git
+cd np-solar-server
 npm install
 ```
 
@@ -79,12 +80,12 @@ This lets students browse to `http://solar.server` with no IP address or port ne
 
 **2. Edit `dnsmasq.conf`** — replace `192.168.1.XXX` with the Pi's actual static IP:
 ```bash
-sudo nano /home/zerocool/pi-server/dnsmasq.conf
+sudo nano /home/zerocool/np-solar-server/dnsmasq.conf
 ```
 
 **3. Install the config and restart dnsmasq:**
 ```bash
-sudo cp /home/zerocool/pi-server/dnsmasq.conf /etc/dnsmasq.conf
+sudo cp /home/zerocool/np-solar-server/dnsmasq.conf /etc/dnsmasq.conf
 sudo systemctl enable dnsmasq
 sudo systemctl restart dnsmasq
 ```
@@ -96,7 +97,7 @@ Once configured, students connect to normal classroom WiFi and browse to `http:/
 ### Updating
 
 ```bash
-cd /home/zerocool/pi-server
+cd /home/zerocool/np-solar-server
 git pull
 sudo systemctl restart pi-server
 ```
@@ -126,28 +127,46 @@ GET /media/:filename  → Serve the file
 | `joined` | server → client | `{ id, room }` | Emitted when someone joins a room |
 | `room-message` | server → client | `{ from, ...data }` | Incoming room message |
 
-### Client-side Example
+### Client-side Example (solar.js)
+
+Include both scripts in your HTML, then use `solar.*` functions anywhere:
 
 ```html
 <script src="/socket.io/socket.io.js"></script>
+<script src="/solar.js"></script>
+
+<!-- Inline buttons -->
+<button onclick="solar.send('hello!')">Send</button>
+<button onclick="solar.join('group1')">Join group1</button>
+<button onclick="solar.sendTo('group1', 'hello group!')">Send to group1</button>
+
 <script>
-  const socket = io();
-
-  // Send a message
-  socket.emit('message', { text: 'hello' });
-
-  // Receive messages
-  socket.on('message', (data) => {
-    console.log(data.from, data.text);
+  // Receive broadcasts from everyone
+  solar.on('message', function(data) {
+    console.log(data.text);
   });
 
-  // Join a room
-  socket.emit('join', 'group1');
-
-  // Send to a room
-  socket.emit('room-message', { room: 'group1', text: 'hello group' });
+  // Receive messages from a room
+  solar.on('room-message', function(data) {
+    console.log(data.text);
+  });
 </script>
 ```
+
+#### solar.js API
+
+| Function | Description |
+|---|---|
+| `solar.send('hello')` | Broadcast to all connected clients |
+| `solar.send({ x: 1, y: 2 })` | Broadcast an object |
+| `solar.join('room')` | Join a named room |
+| `solar.sendTo('room', 'hello')` | Send to everyone in a room |
+| `solar.on('message', fn)` | Listen for broadcast messages |
+| `solar.on('room-message', fn)` | Listen for room messages |
+| `solar.on('connect', fn)` | Fires when connected to server |
+| `solar.myId()` | Returns this client's socket ID |
+
+Both `send()` and `sendTo()` accept a plain string or an object — whichever is easier for the task.
 
 ## Configuration
 

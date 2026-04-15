@@ -3,27 +3,61 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pi Server</title>
+  <title>Solar Server</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    #status { font-weight: bold; }
+    #log { border: 1px solid #ccc; padding: 0.5rem; height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; }
+    button { margin: 0.25rem; padding: 0.4rem 0.8rem; }
+  </style>
 </head>
 <body>
-  <h1>Pi Server</h1>
-  <p>Socket.io status: <span id="status">disconnected</span></p>
+  <h1>Solar Server</h1>
+  <p>Status: <span id="status">connecting...</span></p>
+
+  <hr>
+  <h2>Examples</h2>
+
+  <!-- Send a fixed message -->
+  <button onclick="solar.send('hello from a button!')">Send "hello"</button>
+
+  <!-- Send the value of a text input -->
+  <input id="myInput" type="text" placeholder="type something" />
+  <button onclick="solar.send(document.getElementById('myInput').value)">Send input</button>
+
+  <!-- Join a room -->
+  <button onclick="solar.join('group1')">Join group1</button>
+
+  <!-- Send to a room -->
+  <button onclick="solar.sendTo('group1', 'hello group1!')">Send to group1</button>
+
+  <hr>
+  <h2>Received messages</h2>
+  <div id="log"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/solar.js"></script>
   <script>
-    const socket = io();
-    const status = document.getElementById('status');
-
-    socket.on('connect', () => {
-      status.textContent = 'connected (' + socket.id + ')';
+    // Show connection status
+    solar.on('connect', function(data) {
+      document.getElementById('status').textContent = 'connected — id: ' + data.id;
+    });
+    solar.on('disconnect', function() {
+      document.getElementById('status').textContent = 'disconnected';
     });
 
-    socket.on('disconnect', () => {
-      status.textContent = 'disconnected';
+    // Log all incoming messages
+    solar.on('message', function(data) {
+      var log = document.getElementById('log');
+      log.innerHTML += '<div>' + JSON.stringify(data) + '</div>';
+      log.scrollTop = log.scrollHeight;
     });
 
-    socket.on('message', (data) => {
-      console.log('received message:', data);
+    // Log room messages
+    solar.on('room-message', function(data) {
+      var log = document.getElementById('log');
+      log.innerHTML += '<div>[room] ' + JSON.stringify(data) + '</div>';
+      log.scrollTop = log.scrollHeight;
     });
   </script>
 </body>
