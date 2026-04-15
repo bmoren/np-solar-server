@@ -1,0 +1,13 @@
+{
+  "name": "pi-server",
+  "version": "1.0.0",
+  "description": "Static file server with Socket.io for Raspberry Pi classroom use",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

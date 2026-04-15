@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pi Server</title>
+</head>
+<body>
+  <h1>Pi Server</h1>
+  <p>Socket.io status: <span id="status">disconnected</span></p>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const status = document.getElementById('status');
+
+    socket.on('connect', () => {
+      status.textContent = 'connected (' + socket.id + ')';
+    });
+
+    socket.on('disconnect', () => {
+      status.textContent = 'disconnected';
+    });
+
+    socket.on('message', (data) => {
+      console.log('received message:', data);
+    });
+  </script>
+</body>
+</html>
