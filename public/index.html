@@ -5,60 +5,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Solar Server</title>
   <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; color:white; background-color: black;}
     #status { font-weight: bold; }
     #log { border: 1px solid #ccc; padding: 0.5rem; height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; }
     button { margin: 0.25rem; padding: 0.4rem 0.8rem; }
   </style>
 </head>
 <body>
-  <h1>Solar Server</h1>
-  <p>Status: <span id="status">connecting...</span></p>
 
-  <hr>
-  <h2>Examples</h2>
+<h1>
+Defining location-based experiences through data collection; Photosolar displays, from terminal to paper.
+Data collected from the orephaces of a solar server, used as a structural command for photographic print making. Performed at a response location to the server.
+</h1>
+<h2>
+By Ross Baumgard
+</h2>
 
-  <!-- Send a fixed message -->
-  <button onclick="solar.send('hello from a button!')">Send "hello"</button>
+<button onclick="getData()"> generate instructions from server</button>
 
-  <!-- Send the value of a text input -->
-  <input id="myInput" type="text" placeholder="type something" />
-  <button onclick="solar.send(document.getElementById('myInput').value)">Send input</button>
+<p id="narrative">
+Instructions; to be done on photographic paper, with dyes/chemicals such as cyanotype and solarfast...
+exposure time: 11 h 2 min
+starting time: 12:13 AM
+dyes to add: black
+what direction from server: south · 13 paces
+amount of shade/cover: open sun
+time til fix: 12 h 58 min
+fix time: 46 min (fix til change stops; this time is extra in addition)
+wash time: 1 h 10 min (wash til change stops; this time is extra in addition)
+</p>
 
-  <!-- Join a room -->
-  <button onclick="solar.join('group1')">Join group1</button>
+<p id="variables">
+<ul>
+<li>Variables; collected from solar server to calculate instructions for exposure...</li>
+<li>heat: 39.6 C</li> 
+<li>camera light: 0%</li>
+<li>top camera colors: black</li>
+<li>wifi signal: -42 dBm</li>
+<li>uptime: <span id="uptime"> </span>
 
-  <!-- Send to a room -->
-  <button onclick="solar.sendTo('group1', 'hello group1!')">Send to group1</button>
+</ul>
+</p>
 
-  <hr>
-  <h2>Received messages</h2>
-  <div id="log"></div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="/solar.js"></script>
-  <script>
-    // Show connection status
-    solar.on('connect', function(data) {
-      document.getElementById('status').textContent = 'connected — id: ' + data.id;
-    });
-    solar.on('disconnect', function() {
-      document.getElementById('status').textContent = 'disconnected';
-    });
+<script>
 
-    // Log all incoming messages
-    solar.on('message', function(data) {
-      var log = document.getElementById('log');
-      log.innerHTML += '<div>' + JSON.stringify(data) + '</div>';
-      log.scrollTop = log.scrollHeight;
-    });
+  getData();
+  
+  async function getData() {
 
-    // Log room messages
-    solar.on('room-message', function(data) {
-      var log = document.getElementById('log');
-      log.innerHTML += '<div>[room] ' + JSON.stringify(data) + '</div>';
-      log.scrollTop = log.scrollHeight;
-    });
-  </script>
+  const url = "/time";
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Response status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+      document.getElementById("uptime").innerHTML = Math.round((result.time.uptime / 60)) + " minutes..." 
+
+    console.log(result);
+  } catch (error) {
+    console.error(error.message);
+  }
+}
+  
+
+
+      // document.getElementById("signal").innerHTML = Math.round((result.wifi.signalLevel)) + " dB"
+      // document.getElementById("cpuTemp").innerHTML = Math.round((result.cpuTemprature)) + " ºC" 
+
+
+
+
+
+
+
+</script>
+
 </body>
 </html>
