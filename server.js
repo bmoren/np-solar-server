@@ -14,8 +14,7 @@ const MEDIA_DIR = path.join(PUBLIC_DIR, 'media');
 
 const si = require("systeminformation");
 
-const { StillCamera } = require("pi-camera-connect");
-const stillCamera = new StillCamera();
+const { exec } = require("child_process");
 
 
 // Serve static files from /public
@@ -58,12 +57,17 @@ app.get('/mic', (req, res) => {
 
 app.get('/camera', (req, res) => {
 
-  stillCamera.takeImage().then(image => {
-
-    fs.writeFile("public/webcam/webcam.jpg", image, (err)=>{
-      if (err) throw err;
-      res.json({'image': "public/webcam/webcam.jpg"})
-    });
+exec("rpicam-jpeg --output /public/webcam/webcam.jpg", (error, stdout, stderr) => {
+    if (error) {
+        console.log(`error: ${error.message}`);
+        return;
+    }
+    if (stderr) {
+        console.log(`stderr: ${stderr}`);
+        return;
+    }
+    res.json({'imageURL': 'webcam/webcam.jpg'})
+    console.log(`stdout: ${stdout}`);
 });
 
 })
