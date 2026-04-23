@@ -57,7 +57,7 @@ app.get('/mic', (req, res) => {
 
 app.get('/camera', (req, res) => {
 
-exec("rpicam-jpeg --output /public/webcam/webcam.jpg", (error, stdout, stderr) => {
+exec("rpicam-jpeg --output ~/np-solar-server/public/webcam/webcam.jpg", (error, stdout, stderr) => {
     if (error) {
         console.log(`error: ${error.message}`);
         return;
