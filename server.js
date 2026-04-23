@@ -14,7 +14,7 @@ const MEDIA_DIR = path.join(PUBLIC_DIR, 'media');
 
 const si = require("systeminformation");
 
-const { exec } = require("child_process");
+const { spawn } = require('node:child_process');
 
 
 // Serve static files from /public
@@ -57,18 +57,22 @@ app.get('/mic', (req, res) => {
 
 app.get('/camera', (req, res) => {
 
-exec("rpicam-jpeg --output ~/np-solar-server/public/webcam/webcam.jpg", (error, stdout, stderr) => {
-    if (error) {
-        console.log(`error: ${error.message}`);
-        return;
-    }
-    if (stderr) {
-        console.log(`stderr: ${stderr}`);
-        return;
-    }
-    res.json({'imageURL': 'webcam/webcam.jpg'})
-    console.log(`stdout: ${stdout}`);
+const ls = spawn('rpicam-jpeg --output ~/np-solar-server/public/webcam/webcam.jpg', ['/usr']);
+
+
+ls.stdout.on('data', (data) => {
+  console.log(`stdout: ${data}`);
 });
+
+ls.on('close', (code) => {
+  console.log(`child process close all stdio with code ${code}`);
+});
+
+ls.on('exit', (code) => {
+  res.json({'imageURL': 'webcam/webcam.jpg'})
+  console.log(`child process exited with code ${code}`);
+});
+
 
 })
 
