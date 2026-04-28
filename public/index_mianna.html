@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vote</title>
+  <style> body { margin: 0; overflow: hidden; } </style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    let socket;
+    let currentRound = 1;
+    let hasVoted = false;
+    let statusMsg = '';
+    let resultMsg = '';
+    let tallyMsg = '';
+    let btnA, btnB;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      textAlign(CENTER, CENTER);
+
+      btnA = createButton('Option A');
+      btnA.mousePressed(() => castVote('A'));
+
+      btnB = createButton('Option B');
+      btnB.mousePressed(() => castVote('B'));
+
+      positionButtons();
+
+      socket = io();
+
+      socket.on('round', (r) => {
+        currentRound = r;
+      });
+
+      socket.on('vote-result', ({ winner, round, tally }) => {
+        currentRound = round;
+        hasVoted = false;
+        btnA.removeAttribute('disabled');
+        btnB.removeAttribute('disabled');
+        resultMsg = `Round ${round - 1} winner: ${winner}`;
+        tallyMsg = Object.entries(tally).map(([k, v]) => `${k}: ${v}`).join('   |   ');
+        statusMsg = '';
+      });
+    }
+
+    function draw() {
+      background(245);
+
+      noStroke();
+      fill(80);
+      textSize(20);
+      text(`Round ${currentRound}`, width / 2, 60);
+
+      fill(150);
+      textSize(16);
+      text(statusMsg, width / 2, height / 2 + 80);
+
+      fill(30);
+      textSize(24);
+      text(resultMsg, width / 2, height / 2 + 130);
+
+      fill(100);
+      textSize(16);
+      text(tallyMsg, width / 2, height / 2 + 170);
+    }
+
+    function castVote(choice) {
+      socket.emit('vote', choice);
+      hasVoted = true;
+      btnA.attribute('disabled', '');
+      btnB.attribute('disabled', '');
+      statusMsg = 'Vote cast! Waiting for others...';
+      resultMsg = '';
+      tallyMsg = '';
+    }
+
+    function positionButtons() {
+      btnA.position(width / 2 - 220, height / 2 - 25);
+      btnB.position(width / 2 + 20, height / 2 - 25);
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      positionButtons();
+    }
+  </script>
+</body>
+</html>

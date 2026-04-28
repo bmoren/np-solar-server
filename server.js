@@ -3,6 +3,16 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
+
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, 'public/uploads'),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `${Date.now()}${ext}`);
+  }
+});
+const upload = multer({ storage });
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -51,13 +61,20 @@ si.wifiConnections()
 })
 
 
+app.post('/upload', upload.single('photo'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const url = `/uploads/${req.file.filename}`;
+  io.emit('new-photo', url);
+  res.json({ url });
+});
+
 app.get('/mic', (req, res) => {
 
 })
 
 app.get('/camera', (req, res) => {
 
-const ls = spawn('rpicam-jpeg', ['--output ~/np-solar-server/public/webcam/webcam.jpg', '/usr']);
+const ls = spawn('rpicam-jpeg', ['--output', path.join(PUBLIC_DIR, 'webcam/webcam.jpg')]);
 
 
 ls.stdout.on('data', (data) => {
@@ -66,6 +83,11 @@ ls.stdout.on('data', (data) => {
 
 ls.on('close', (code) => {
   console.log(`child process close all stdio with code ${code}`);
+  if (code === 0) {
+    res.json({ imageURL: 'webcam/webcam.jpg' });
+  } else {
+    res.status(500).json({ error: `rpicam-jpeg exited with code ${code}` });
+  }
 });
 
 ls.on('exit', (code) => {
@@ -90,9 +112,43 @@ ls.on('exit', (code) => {
 
 
 
+// --- Voting ---
+const QUORUM = 5;
+let round = 1;
+
+function getConnectedSockets() {
+  return [...io.sockets.sockets.values()];
+}
+
+function checkVotes() {
+  const sockets = getConnectedSockets();
+  if (sockets.length < QUORUM) return;
+  if (!sockets.every(s => s.vote !== undefined)) return;
+
+  const tally = {};
+  sockets.forEach(s => { tally[s.vote] = (tally[s.vote] || 0) + 1; });
+  const winner = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
+
+  console.log(`[vote] round ${round} result: ${winner}`, tally);
+  io.emit('vote-result', { winner, round, tally });
+
+  round++;
+  sockets.forEach(s => { delete s.vote; });
+}
+
 // Socket.io
 io.on('connection', (socket) => {
   console.log(`[socket] client connected: ${socket.id}`);
+
+  // Send current round so client can sync on join
+  socket.emit('round', round);
+
+  socket.on('vote', (choice) => {
+    if (socket.vote !== undefined) return; // ignore double votes
+    socket.vote = choice;
+    console.log(`[vote] ${socket.id} voted: ${choice}`);
+    checkVotes();
+  });
 
   // Example: broadcast a message to all other clients
   socket.on('message', (data) => {
@@ -101,7 +157,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('addItem', (itemName) => {
-    
+
 
   })
 
@@ -118,6 +174,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[socket] client disconnected: ${socket.id}`);
+    // Re-check in case the disconnecting socket was the last unvoted player
+    // and remaining connected sockets have all voted
+    setImmediate(checkVotes);
   });
 });
 
