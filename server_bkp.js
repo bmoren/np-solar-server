@@ -18,13 +18,6 @@ const app = express();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer);
 
-const visitors = new Map(); // socket.id → name
-const signals = [];
-
-function emitState() {
-  io.emit('state', { visitors: [...visitors.values()], signals });
-}
-
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MEDIA_DIR = path.join(PUBLIC_DIR, 'media');
@@ -173,14 +166,6 @@ io.on('connection', (socket) => {
     socket.join(room);
     console.log(`[socket] ${socket.id} joined room: ${room}`);
     io.to(room).emit('joined', { id: socket.id, room });
-    visitors.set(socket.id, room);
-    emitState();
-  });
-
-  socket.on('sendSignal', ({ name, message, color }) => {
-    signals.push({ name, message, color, time: new Date().toLocaleTimeString() });
-    if (signals.length > 50) signals.shift();
-    emitState();
   });
 
   socket.on('room-message', ({ room, data }) => {
@@ -189,8 +174,8 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[socket] client disconnected: ${socket.id}`);
-    visitors.delete(socket.id);
-    emitState();
+    // Re-check in case the disconnecting socket was the last unvoted player
+    // and remaining connected sockets have all voted
     setImmediate(checkVotes);
   });
 });
