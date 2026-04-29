@@ -43,7 +43,7 @@ app.get('/cputemp', (req, res) => {
   .then((data) => {
 
     res.json({'cpuTemprature': data})
-    console.log(data)
+    // console.log(data)
   })
   .catch((error) => {
     res.status(500).json({ error: 'Could not read CPU Temp ' });
@@ -60,7 +60,7 @@ si.wifiConnections()
   .then((data) => {
 
     res.json({'wifi': data})
-    console.log(data)
+    // console.log(data)
   })
   .catch((error) => {
     res.status(500).json({ error: 'Could not read wifi Data ' });
@@ -101,34 +101,76 @@ ls.on('exit', (code) => {
   console.log(`child process exited with code ${code}`);
 });
 
-// exec("rpicam-jpeg --output ~/np-solar-server/public/webcam/webcam.jpg", (error, stdout, stderr) => {
-//     if (error) {
-//         console.log(`error: ${error.message}`);
-//         return;
-//     }
-//     if (stderr) {
-//         console.log(`stderr: ${stderr}`);
-//         return;
-//     }
-//     res.json({'imageURL': 'webcam/webcam.jpg'})
-//     console.log(`stdout: ${stdout}`);
-// });
 
 })
 
 
 
 
+// --- Game state ---
+
+// const MAP = {
+//   city:             ['grocery', 'resturant'],
+//   grocery:          ['jail', 'smhouse'],
+//   resturant:        ['resturantkitchen', 'carinterior'],
+//   jail:             [],
+//   smhouse:          [],
+//   resturantkitchen: [],
+//   carinterior:      []
+// };
+
+
+const LABELS = {
+  city:                      'City',
+  citygrocery:               'Grocery Store',
+  cityresturant:             'Restaurant',
+  grocery:                   'Grocery Store',
+  groceryjail:               'Jail',
+  grocerysmhouse:            "SM's House",
+  resturant:                 'Restaurant',
+  resturantresturantkitchen: 'Restaurant Kitchen',
+  resturantcarinterior:      'Car Interior',
+  jail:                      'Jail',
+  smhouse:                   "SM's House",
+  resturantkitchen:          'Restaurant Kitchen',
+  carinterior:               'Car Interior'
+};
+
+const MAP = {
+  city:                      ['citygrocery', 'cityresturant'],
+  citygrocery:               ['grocery'],
+  cityresturant:             ['resturant'],
+  grocery:                   ['groceryjail', 'grocerysmhouse'],
+  groceryjail:               ['jail'],
+  grocerysmhouse:            ['smhouse'],
+  resturant:                 ['resturantresturantkitchen', 'resturantcarinterior'],
+  resturantresturantkitchen: ['resturantkitchen'],
+  resturantcarinterior:      ['carinterior'],
+  jail:                      [],
+  smhouse:                   [],
+  resturantkitchen:          [],
+  carinterior:               []
+};
+
+
+
+
+let currentLoc = 'city';
+
+// --- Characters ---
+const characters = ["SM", "J", "D", "A", "M"];
+let characterPool = [...characters];
+
 // --- Voting ---
 const QUORUM = 5;
 let round = 1;
 
-function getConnectedSockets() {
-  return [...io.sockets.sockets.values()];
+function getPlayerSockets() {
+  return [...io.sockets.sockets.values()].filter(s => s.character);
 }
 
 function checkVotes() {
-  const sockets = getConnectedSockets();
+  const sockets = getPlayerSockets();
   if (sockets.length < QUORUM) return;
   if (!sockets.every(s => s.vote !== undefined)) return;
 
@@ -140,21 +182,49 @@ function checkVotes() {
   io.emit('vote-result', { winner, round, tally });
 
   round++;
-  sockets.forEach(s => { delete s.vote; });
+  currentLoc = winner;
+  io.emit('loc-update', { loc: currentLoc, options: MAP[currentLoc].map(key => ({ key, label: LABELS[key] })) });
+  getPlayerSockets().forEach(s => { delete s.vote; });
 }
+
+
+
+
 
 // Socket.io
 io.on('connection', (socket) => {
   console.log(`[socket] client connected: ${socket.id}`);
 
-  // Send current round so client can sync on join
+  // Assign character or spectator
+  if (characterPool.length > 0) {
+    socket.character = characterPool.shift();
+    socket.emit('character-assigned', socket.character);
+    console.log(`[game] assigned character ${socket.character} to ${socket.id}`);
+  } else {
+    socket.emit('spectator');
+    console.log(`[game] ${socket.id} joined as spectator`);
+  }
+
+  // Sync joining client to current game state
   socket.emit('round', round);
+  socket.emit('loc-update', { loc: currentLoc, options: MAP[currentLoc].map(key => ({ key, label: LABELS[key] })) });
 
   socket.on('vote', (choice) => {
-    if (socket.vote !== undefined) return; // ignore double votes
+    if (!socket.character) return; // spectators can't vote
+    if (socket.vote !== undefined) return;
+    if (!MAP[currentLoc].includes(choice)) return;
     socket.vote = choice;
-    console.log(`[vote] ${socket.id} voted: ${choice}`);
+    console.log(`[vote] ${socket.character} (${socket.id}) voted: ${choice}`);
     checkVotes();
+  });
+
+  socket.on('reset', () => {
+    currentLoc = 'city';
+    round = 1;
+    getPlayerSockets().forEach(s => { delete s.vote; });
+    console.log('[game] reset');
+    io.emit('round', round);
+    io.emit('loc-update', { loc: currentLoc, options: MAP[currentLoc].map(key => ({ key, label: LABELS[key] })) });
   });
 
   // Example: broadcast a message to all other clients
@@ -189,6 +259,10 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[socket] client disconnected: ${socket.id}`);
+    if (socket.character) {
+      characterPool.unshift(socket.character); // return to front of pool
+      console.log(`[game] character ${socket.character} returned to pool`);
+    }
     visitors.delete(socket.id);
     emitState();
     setImmediate(checkVotes);

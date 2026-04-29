@@ -25,7 +25,7 @@ By Ross Baumgard
 
 <p id="narrative">
 Instructions; to be done on photographic paper, with dyes/chemicals such as cyanotype and solarfast...
-exposure time: 11 h 2 min
+exposure time: <span id="uptimeNarrative"> ... </span> 
 starting time: 12:13 AM
 dyes to add: black
 what direction from server: south · 13 paces
@@ -38,11 +38,11 @@ wash time: 1 h 10 min (wash til change stops; this time is extra in addition)
 <p id="variables">
 <ul>
 <li>Variables; collected from solar server to calculate instructions for exposure...</li>
-<li>heat: 39.6 C</li> 
-<li>camera light: 0%</li>
-<li>top camera colors: black</li>
-<li>wifi signal: -42 dBm</li>
-<li>uptime: <span id="uptime"> </span>
+<li>CPU Temprature: <span id="cpuTemp">... </span></li> 
+<li>camera brightness: <span id="brightness">... </span></li>
+<li>top camera colors: <span id="topColors">... </span></li>
+<li>wifi signal: <span id="signal">... </span> </li>
+<li>uptime: <span id="uptime">... </span> </li>
 
 </ul>
 </p>
@@ -54,28 +54,137 @@ wash time: 1 h 10 min (wash til change stops; this time is extra in addition)
   
   async function getData() {
 
-  const url = "/time";
 
+    //uptime
+  
   try {
-    const response = await fetch(url);
+    const response = await fetch("/time");
     if (!response.ok) {
       throw new Error(`Response status: ${response.status}`);
     }
 
     const result = await response.json();
 
-      document.getElementById("uptime").innerHTML = Math.round((result.time.uptime / 60)) + " minutes..." 
+      document.getElementById("uptime").innerHTML = Math.round((result.time.uptime / 60)) + " minutes" 
+      document.getElementById("uptimeNarrative").innerHTML = Math.round((result.time.uptime / 60)) + " minutes" 
+
+    // console.log(result);
+  } catch (error) {
+    console.error(error.message);
+  }
+
+
+      //uptime
+ 
+  try {
+    const response = await fetch("/signal");
+    if (!response.ok) {
+      throw new Error(`Response status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+     document.getElementById("signal").innerHTML = Math.round((result.wifi[0].signalLevel)) + " dB"
 
     console.log(result);
   } catch (error) {
     console.error(error.message);
   }
+
+
+    try {
+    const response = await fetch("/cputemp");
+    if (!response.ok) {
+      throw new Error(`Response status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+     document.getElementById("cpuTemp").innerHTML = Math.round((result.cpuTemprature.main)) + " ºC" 
+
+    console.log(result);
+  } catch (error) {
+    console.error(error.message);
+  }
+
+
+
+    try {
+    const response = await fetch("/camera");
+    if (!response.ok) {
+      throw new Error(`Response status: ${response.status}`);
+    }
+
+    const result = await response.json();
+      console.log(result.imageURL)
+
+   const PALETTE = { red: [255, 0, 0], orange: [255, 165, 0], yellow: [255, 255, 0], green: [0, 128, 0], blue: [0, 0, 255], indigo: [75, 0, 130], violet: [238, 130, 238], black: [0, 0, 0], brown: [150, 75, 0], white: [255, 255, 255] };
+
+   const IMAGE_SRC = result.imageURL;
+
+   const img = new Image();
+   img.onload = () => {
+     const c = document.createElement("canvas");
+     const x = c.getContext("2d", { willReadFrequently: true });
+     const scale = Math.min(64 / img.naturalWidth, 64 / img.naturalHeight, 1);
+     c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+     c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+     x.drawImage(img, 0, 0, c.width, c.height);
+
+     const buckets = Object.fromEntries(Object.keys(PALETTE).map((name) => [name, { count: 0, rgb: [0, 0, 0] }]));
+     const d = x.getImageData(0, 0, c.width, c.height).data;
+     for (let i = 0; i < d.length; i += 4) {
+       if (d[i + 3] < 16) continue;
+       let best = "red", bestDist = Infinity;
+       for (const [name, [pr, pg, pb]] of Object.entries(PALETTE)) {
+         const dist = (d[i] - pr) ** 2 + (d[i + 1] - pg) ** 2 + (d[i + 2] - pb) ** 2;
+         if (dist < bestDist) { best = name; bestDist = dist; }
+       }
+       buckets[best].count++;
+       buckets[best].rgb[0] += d[i];
+       buckets[best].rgb[1] += d[i + 1];
+       buckets[best].rgb[2] += d[i + 2];
+     }
+
+     const top3 = Object.entries(buckets)
+       .filter(([, v]) => v.count)
+       .sort((a, b) => b[1].count - a[1].count)
+       .slice(0, 3)
+       .map(([name, v]) => `${name}: rgb(${v.rgb.map((n) => Math.round(n / v.count)).join(", ")})`);
+
+     [window.color1, window.color2, window.color3] = top3;
+     console.log(top3);
+     document.getElementById("topColors").innerHTML = top3;
+
+     let brightnessSum = 0, pixelCount = 0;
+     for (let i = 0; i < d.length; i += 4) {
+       if (d[i + 3] < 16) continue;
+       brightnessSum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+       pixelCount++;
+     }
+     const brightness = pixelCount ? Math.round(brightnessSum / pixelCount) : 0;
+     document.getElementById("brightness").innerHTML = brightness + " / 255";
+
+   };
+   img.src = IMAGE_SRC;
+    
+
+
+
+  } catch (error) {
+    console.error(error.message);
+  }
+
+
+
+
+
+
+
+
 }
   
 
-
-      // document.getElementById("signal").innerHTML = Math.round((result.wifi.signalLevel)) + " dB"
-      // document.getElementById("cpuTemp").innerHTML = Math.round((result.cpuTemprature)) + " ºC" 
 
 
 
