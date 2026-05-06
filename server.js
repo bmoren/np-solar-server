@@ -187,13 +187,113 @@ function checkVotes() {
   getPlayerSockets().forEach(s => { delete s.vote; });
 }
 
+//mo game variables + functions
 
 
+function getMoSockets() {
+  return [...io.sockets.sockets.values()].filter(s => s.moPlayer);
+}
 
+
+// =============================================
+// EATER FRENZY — player state only
+// Goobers run client-side; seed keeps them in sync
+// =============================================
+
+let efState = 'startGame';
+let efSeed = 0;
+const efPlayers = new Map(); // socketId → { x, y, alive, score }
+                              // x/y are normalised 0-1 fractions of the client window
+
+function efPlayersPayload() {
+  const out = {};
+  efPlayers.forEach((p, id) => { out[id] = { x: p.x, y: p.y, alive: p.alive, score: p.score }; });
+  return out;
+}
+
+function efReset() {
+  efState = 'startGame';
+  efPlayers.forEach(p => { p.alive = true; p.score = 0; p.x = 0; p.y = 0; });
+  io.emit('ef:state', efState);
+  io.emit('ef:players', efPlayersPayload());
+}
+
+// Relay player positions to all clients at ~30fps
+setInterval(() => {
+  if (efState === 'actualGame') io.emit('ef:players', efPlayersPayload());
+}, 33);
+
+// =============================================
 
 // Socket.io
 io.on('connection', (socket) => {
   console.log(`[socket] client connected: ${socket.id}`);
+
+//mo game stuff
+
+  socket.on('moUpdatePlayer', (player)=>{
+
+    socket.moPlayer = player
+
+    io.emit('updatePlayer')
+    
+
+  })
+
+  socket.on('checkforGameOver', ()=>{
+    io.emit('moGameOver')
+  })
+
+  socket.on('resetTheGame', ()=>{
+    io.emit('moGameReset')
+  })
+
+  // =============================================
+  // EATER FRENZY — per-socket handlers
+  // =============================================
+
+  socket.on('ef:join', () => {
+    efPlayers.set(socket.id, { x: 0, y: 0, alive: true, score: 0 });
+    console.log(`[ef] player joined: ${socket.id}`);
+    // send current state; if game already running, include seed so client can recreate goobers
+    socket.emit('ef:welcome', { state: efState, players: efPlayersPayload(), seed: efSeed });
+    io.emit('ef:players', efPlayersPayload());
+  });
+
+  // update the position of each player in the playerslist
+  socket.on('ef:position', ({ x, y }) => {
+    const p = efPlayers.get(socket.id);
+    if (p && p.alive) { p.x = x; p.y = y; }
+  });
+
+  socket.on('ef:died', () => {
+    const p = efPlayers.get(socket.id);
+    if (!p) return;
+    p.alive = false;
+    console.log(`[ef] player died: ${socket.id}`);
+    io.emit('ef:players', efPlayersPayload());
+    // check if everyone is now dead
+    const all = [...efPlayers.values()];
+    if (all.length > 0 && all.every(p => !p.alive)) {
+      efState = 'gameOver';
+      io.emit('ef:state', efState);
+    }
+  });
+
+  socket.on('ef:start', () => {
+    efSeed = Math.floor(Math.random() * 1000000);
+    efState = 'actualGame';
+    console.log(`[ef] game started, seed: ${efSeed}`);
+    io.emit('ef:state', efState);
+    io.emit('ef:seed', efSeed); // all clients use this to generate identical goobers
+  });
+
+  socket.on('ef:reset', () => {
+    console.log('[ef] game reset');
+    efReset();
+  });
+
+  // =============================================
 
   // Assign character or spectator
   if (characterPool.length > 0) {
@@ -233,10 +333,6 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('message', { from: socket.id, ...data });
   });
 
-  socket.on('addItem', (itemName) => {
-
-
-  })
 
   // Example: send to a specific room
   socket.on('join', (room) => {
@@ -259,6 +355,12 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[socket] client disconnected: ${socket.id}`);
+    // EATER FRENZY — remove player on disconnect
+    if (efPlayers.has(socket.id)) {
+      efPlayers.delete(socket.id);
+      console.log(`[ef] player left: ${socket.id}`);
+      io.emit('ef:players', efPlayersPayload());
+    }
     if (socket.character) {
       characterPool.unshift(socket.character); // return to front of pool
       console.log(`[game] character ${socket.character} returned to pool`);
